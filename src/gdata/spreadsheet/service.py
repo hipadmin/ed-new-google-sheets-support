@@ -47,6 +47,13 @@ class RequestError(Error):
 class SpreadsheetsService(gdata.service.GDataService):
   """Client for the Google Spreadsheets service."""
 
+  # Bare minimum to work with new Google Sheets introduced in December 2013
+  # "To override the versioning system and update the entry regardless of whether someone else has updated it since you
+  # retrieved it, use If-Match: * instead of specifying the ETag in the header"
+  # https://developers.google.com/gdata/docs/2.0/reference#ResourceVersioning
+  force_update_header = {}
+  force_update_header['If-Match'] = '*'
+
   def __init__(self, email=None, password=None, source=None,
                server='spreadsheets.google.com', additional_headers=None,
                **kwargs):
@@ -363,7 +370,8 @@ class SpreadsheetsService(gdata.service.GDataService):
     for a_link in entry.link:
       if a_link.rel == 'edit':
         return self.Put(entry, a_link.href, 
-            converter=gdata.spreadsheet.SpreadsheetsListFromString)
+            converter=gdata.spreadsheet.SpreadsheetsListFromString,
+            extra_headers=self.force_update_header)
         
   def DeleteRow(self, entry):
     """Deletes a row, the provided entry
