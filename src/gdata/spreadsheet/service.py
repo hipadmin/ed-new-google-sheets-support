@@ -51,8 +51,20 @@ class SpreadsheetsService(gdata.service.GDataService):
   # "To override the versioning system and update the entry regardless of whether someone else has updated it since you
   # retrieved it, use If-Match: * instead of specifying the ETag in the header"
   # https://developers.google.com/gdata/docs/2.0/reference#ResourceVersioning
-  force_update_header = {}
-  force_update_header['If-Match'] = '*'
+  force_update_headers = {}
+  force_update_headers['If-Match'] = '*'
+
+
+  def _get_forceable_extra_headers(self, force):
+    """
+    Returns set of headers that will force the http operation, regardless of resource versioning conflicts.
+    :param force:
+    :return:
+    """
+    if force:
+      return self.force_update_headers
+    else:
+      return {}
 
   def __init__(self, email=None, password=None, source=None,
                server='spreadsheets.google.com', additional_headers=None,
@@ -160,7 +172,7 @@ class SpreadsheetsService(gdata.service.GDataService):
         'https://%s/feeds/worksheets/%s/private/full' % (self.server, key),
         converter=gdata.spreadsheet.SpreadsheetsWorksheetFromString)
 
-  def UpdateWorksheet(self, worksheet_entry, url=None):
+  def UpdateWorksheet(self, worksheet_entry, url=None, force=False):
     """Changes the size and/or title of the desired worksheet.
     
     Args:
@@ -175,9 +187,10 @@ class SpreadsheetsService(gdata.service.GDataService):
     """
     target_url = url or worksheet_entry.GetEditLink().href
     return self.Put(worksheet_entry, target_url, 
-        converter=gdata.spreadsheet.SpreadsheetsWorksheetFromString)
+        converter=gdata.spreadsheet.SpreadsheetsWorksheetFromString,
+        extra_headers=self._get_forceable_extra_headers(force))
     
-  def DeleteWorksheet(self, worksheet_entry=None, url=None):
+  def DeleteWorksheet(self, worksheet_entry=None, url=None, force=False):
     """Removes the desired worksheet from the spreadsheet
     
     Args:
@@ -194,7 +207,8 @@ class SpreadsheetsService(gdata.service.GDataService):
       target_url = url
     else:
       target_url = worksheet_entry.GetEditLink().href
-    return self.Delete(target_url)
+    return self.Delete(target_url,
+                       extra_headers=self._get_forceable_extra_headers(force))
   
   def GetCellsFeed(self, key, wksht_id='default', cell=None, query=None, 
       visibility='private', projection='full'):
@@ -258,7 +272,7 @@ class SpreadsheetsService(gdata.service.GDataService):
       return self.Get(uri, 
           converter=gdata.spreadsheet.SpreadsheetsListFeedFromString)
     
-  def UpdateCell(self, row, col, inputValue, key, wksht_id='default'):
+  def UpdateCell(self, row, col, inputValue, key, wksht_id='default', force=False):
     """Updates an existing cell.
     
     Args:
@@ -282,7 +296,8 @@ class SpreadsheetsService(gdata.service.GDataService):
       if a_link.rel == 'edit':
         entry.cell = new_cell
         return self.Put(entry, a_link.href, 
-            converter=gdata.spreadsheet.SpreadsheetsCellFromString)
+            converter=gdata.spreadsheet.SpreadsheetsCellFromString,
+            extra_headers=self._get_forceable_extra_headers(force))
 
   def _GenerateCellsBatchUrl(self, spreadsheet_key, worksheet_id):
     return ('https://spreadsheets.google.com/feeds/cells/%s/%s/'
@@ -290,7 +305,8 @@ class SpreadsheetsService(gdata.service.GDataService):
 
   def ExecuteBatch(self, batch_feed, url=None, spreadsheet_key=None, 
       worksheet_id=None,
-      converter=gdata.spreadsheet.SpreadsheetsCellsFeedFromString):
+      converter=gdata.spreadsheet.SpreadsheetsCellsFeedFromString,
+      force=False):
     """Sends a batch request feed to the server.
 
     The batch request needs to be sent to the batch URL for a particular 
@@ -321,9 +337,10 @@ class SpreadsheetsService(gdata.service.GDataService):
 
     if url is None:
       url = self._GenerateCellsBatchUrl(spreadsheet_key, worksheet_id)
-    return self.Post(batch_feed, url, converter=converter)
+    return self.Post(batch_feed, url, converter=converter,
+                     extra_headers=self._get_forceable_extra_headers(force))
     
-  def InsertRow(self, row_data, key, wksht_id='default'):
+  def InsertRow(self, row_data, key, wksht_id='default', force=False):
     """Inserts a new row with the provided data
     
     Args:
@@ -343,9 +360,10 @@ class SpreadsheetsService(gdata.service.GDataService):
     post_url = 'https://spreadsheets.google.com/feeds/list/%s/%s/private/full'%(
         key, wksht_id) 
     return self.Post(new_entry, post_url, 
-        converter=gdata.spreadsheet.SpreadsheetsListFromString)
+        converter=gdata.spreadsheet.SpreadsheetsListFromString,
+        extra_headers=self._get_forceable_extra_headers(force))
     
-  def UpdateRow(self, entry, new_row_data):
+  def UpdateRow(self, entry, new_row_data, force=False):
     """Updates a row with the provided data
 
     If you want to add additional information to a row, it is often
@@ -371,9 +389,9 @@ class SpreadsheetsService(gdata.service.GDataService):
       if a_link.rel == 'edit':
         return self.Put(entry, a_link.href, 
             converter=gdata.spreadsheet.SpreadsheetsListFromString,
-            extra_headers=self.force_update_header)
+            extra_headers=self._get_forceable_extra_headers(force))
         
-  def DeleteRow(self, entry):
+  def DeleteRow(self, entry, force=False):
     """Deletes a row, the provided entry
     
     Args:
@@ -384,7 +402,8 @@ class SpreadsheetsService(gdata.service.GDataService):
     """
     for a_link in entry.link:
       if a_link.rel == 'edit':
-        return self.Delete(a_link.href)
+        return self.Delete(a_link.href,
+                           extra_headers=self._get_forceable_extra_headers(force))
 
 
 class DocumentQuery(gdata.service.Query):
